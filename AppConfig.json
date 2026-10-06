@@ -1,0 +1,11 @@
+{
+  "module": "Footprints",
+  "name": "搞足迹",
+  "bundle_id": "com.gaoseries.GaoZuJi",
+  "executable": "GaoZuJi",
+  "scheme": "gaozuji",
+  "widget_folder": "WidgetExtension",
+  "widget": "GaoZuJiWidgets",
+  "group": "5G96498KGJ.com.gaoseries.GaoZuJi",
+  "preferences": "com.gaoseries.GaoZuJi.Footprints"
+}
