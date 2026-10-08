@@ -105,9 +105,25 @@ struct AtlasCanvas: View {
     /// 紧凑中国模式（小组件迷你地图）：用含南海的完整取景框，不画左下角小图，
     /// 远南单元图钉直接画在主画布上，避免小组件统计面板遮挡小图。
     var compactChina = false
+    /// 常驻地点只是地图参照，不参与已到访区域着色与足迹统计。
+    var residentCity: City? = nil
     /// Bottom-left inset box showing the South China Sea islands at small scale.
     static func chinaInset(size: CGSize) -> CGRect {
         CGRect(x: 14, y: size.height-132, width: 152, height: 118)
+    }
+    static func drawResidentPin(_ ctx: inout GraphicsContext, at point: CGPoint, selected: Bool, scale: CGFloat = 1) {
+        let center = CGPoint(x: point.x, y: point.y - 7 * scale)
+        let circle = Path(ellipseIn: CGRect(x: center.x - 10 * scale, y: center.y - 10 * scale, width: 20 * scale, height: 20 * scale))
+        var tail = Path()
+        tail.move(to: CGPoint(x: point.x - 5 * scale, y: point.y))
+        tail.addLine(to: CGPoint(x: point.x, y: point.y + 7 * scale))
+        tail.addLine(to: CGPoint(x: point.x + 5 * scale, y: point.y))
+        tail.closeSubpath()
+        let color = Color(red: 0.17, green: 0.39, blue: 0.36)
+        ctx.fill(tail, with: .color(color))
+        ctx.fill(circle, with: .color(color))
+        ctx.stroke(circle, with: .color(selected ? Ink.ochre : Ink.panel), lineWidth: selected ? 2.5 : 1.4)
+        ctx.draw(Text(Image(systemName: "house.fill")).font(.system(size: 11 * scale, weight: .semibold)).foregroundColor(.white), at: center)
     }
     var body: some View {
         // 3.37④：Canvas 本体对 VoiceOver 是一块未知元素——叠加一层按同一投影摆放的
@@ -174,7 +190,25 @@ struct AtlasCanvas: View {
             // One pin per visible collection unit, labels use collision suppression.
             // In China mode, far-south units (e.g. 三沙) live in the inset instead.
             var labelRects:[CGRect]=[]
-            for c in cities.sorted(by:{ a,b in a.id == selected ? true : b.id == selected ? false : a.id < b.id }) where !china || (c.countryID == "CHN" && (compactChina || c.latitude >= 17.8)) {
+            if let city = residentCity, !china || (city.countryID == "CHN" && (compactChina || city.latitude >= 17.8)) {
+                let point = t.point(city)
+                if point.x > -10 && point.x < size.width + 10 && point.y > -10 && point.y < size.height + 10 {
+                    Self.drawResidentPin(&ctx, at: point, selected: city.id == selected)
+                    // 先预留常驻标记及名称的位置，避免周围到访标签遮挡它。
+                    labelRects.append(CGRect(x: point.x - 13, y: point.y - 20, width: 26, height: 30))
+                    if showLabels {
+                        let title = "\(city.name) · 常驻"
+                        let width = CGFloat(title.count) * 11 + 10
+                        let candidates = [CGRect(x: point.x + 15, y: point.y - 18, width: width, height: 20), CGRect(x: point.x - width - 15, y: point.y - 18, width: width, height: 20)]
+                        if let rect = candidates.first(where: { CGRect(origin: .zero, size: size).contains($0) }) {
+                            ctx.fill(Path(roundedRect: rect.insetBy(dx: -2, dy: 1), cornerRadius: 3), with: .color(Ink.panel.opacity(0.92)))
+                            ctx.draw(Text(title).font(.system(size: 10, weight: .semibold)).foregroundColor(Ink.text), at: CGPoint(x: rect.minX, y: rect.midY), anchor: .leading)
+                            labelRects.append(rect)
+                        }
+                    }
+                }
+            }
+            for c in cities.sorted(by:{ a,b in a.id == selected ? true : b.id == selected ? false : a.id < b.id }) where c.id != residentCity?.id && (!china || (c.countryID == "CHN" && (compactChina || c.latitude >= 17.8))) {
                 let p=t.point(c); guard p.x > -10 && p.x < size.width+10 && p.y > -10 && p.y < size.height+10 else { continue }
                 ctx.fill(Path(ellipseIn:CGRect(x:p.x-5,y:p.y-4,width:12,height:12)),with:.color(.black.opacity(0.12)))
                 ctx.fill(Path(ellipseIn:CGRect(x:p.x-4,y:p.y-6,width:8,height:8)),with:.color(Color(red:0.40,green:0.23,blue:0.12)))
@@ -204,10 +238,14 @@ struct AtlasCanvas: View {
                     insetCtx.fill(path,with:.color(lit ? Color(red:0.69,green:0.42,blue:0.23).opacity(0.75) : Color(red:0.85,green:0.81,blue:0.69)),style:FillStyle(eoFill:true))
                     insetCtx.stroke(path,with:.color(Ink.muted.opacity(outlineOnly ? 0.55 : 0.45)),lineWidth:outlineOnly ? 0.5 : 0.3)
                 }
-                for c in cities where c.countryID == "CHN" && c.latitude < 17.8 {
+                for c in cities where c.id != residentCity?.id && c.countryID == "CHN" && c.latitude < 17.8 {
                     let p=AtlasPaths.projectChina(c.longitude,c.latitude).applying(iaffine)
                     guard inset.contains(p) else { continue }
                     insetCtx.fill(Path(ellipseIn:CGRect(x:p.x-2.4,y:p.y-3.2,width:4.8,height:4.8)),with:.color(Color(red:0.40,green:0.23,blue:0.12)))
+                }
+                if let city = residentCity, city.countryID == "CHN", city.latitude < 17.8 {
+                    let point = AtlasPaths.projectChina(city.longitude, city.latitude).applying(iaffine)
+                    if inset.contains(point) { Self.drawResidentPin(&insetCtx, at: point, selected: city.id == selected, scale: 0.65) }
                 }
                 ctx.draw(Text("南海诸岛").font(.system(size:7)).foregroundColor(Ink.muted),at:CGPoint(x:inset.minX+8,y:inset.maxY-9),anchor:.leading)
             }
@@ -226,21 +264,28 @@ struct AtlasCanvas: View {
             let t = MapTransform(size: geo.size,
                                  bounds: china ? (compactChina ? paths.chinaBounds : paths.chinaMainBounds) : paths.worldBounds,
                                  china: china, zoom: zoom, pan: pan)
-            ForEach(cities.sorted(by: { $0.id < $1.id })) { city in
-                let p = t.point(city)
-                if p.x > -10 && p.x < geo.size.width + 10 && p.y > -10 && p.y < geo.size.height + 10 {
+            let accessibleCities = cities.filter { $0.id != residentCity?.id } + (residentCity.map { [$0] } ?? [])
+            ForEach(accessibleCities.sorted(by: { $0.id < $1.id })) { city in
+                let p = accessibilityPoint(city, transform: t, size: geo.size)
+                if (!china || city.countryID == "CHN") && p.x > -10 && p.x < geo.size.width + 10 && p.y > -10 && p.y < geo.size.height + 10 {
                     Color.clear
                         .frame(width: 16, height: 16)
                         .contentShape(Rectangle())
                         .position(p)
                         .accessibilityElement()
-                        .accessibilityLabel(tF("\(city.name)，已到访", "\(city.name), visited"))
+                        .accessibilityLabel(city.id == residentCity?.id ? tF("\(city.name)，常驻城市", "\(city.name), home city") : tF("\(city.name)，已到访", "\(city.name), visited"))
                         .accessibilityAddTraits(.isStaticText)
                 }
             }
             .allowsHitTesting(false)
         }
         }
+    }
+    private func accessibilityPoint(_ city: City, transform: MapTransform, size: CGSize) -> CGPoint {
+        guard china && !compactChina && city.latitude < 17.8 else { return transform.point(city) }
+        let inner = Self.chinaInset(size: size).insetBy(dx: 10, dy: 14)
+        let inset = MapTransform(size: inner.size, bounds: paths.chinaSouthBounds, china: true, zoom: 1, pan: .zero)
+        return AtlasPaths.projectChina(city.longitude, city.latitude).applying(inset.affine.concatenating(CGAffineTransform(translationX: inner.minX, y: inner.minY)))
     }
 }
 struct MapPage: View {
@@ -273,12 +318,12 @@ struct MapPage: View {
             HStack(alignment:.top,spacing:16) {
                 GeometryReader { geo in
                     ZStack(alignment:.topLeading) {
-                        AtlasCanvas(paths:paths,china:china,cities:visibleCities,selected:store.selectedCity,selectedCountry:selectedCountry,zoom:zoom,pan:pan)
+                        AtlasCanvas(paths:paths,china:china,cities:visibleCities,selected:store.selectedCity,selectedCountry:selectedCountry,zoom:zoom,pan:pan,residentCity:store.residentCity)
                             .gesture(DragGesture(minimumDistance:5).onChanged { value in pan=CGSize(width:dragStart.width+value.translation.width,height:dragStart.height+value.translation.height) }.onEnded { _ in dragStart=pan })
                             .simultaneousGesture(MagnificationGesture().onChanged { factor in zoom=min(max(baseZoom*factor,1),8) }.onEnded { _ in baseZoom=zoom })
                             .simultaneousGesture(SpatialTapGesture().onEnded { value in select(at:value.location,size:geo.size) })
                         VStack(alignment:.leading,spacing:4) { Text(china ? "神州行记" : "世界航海志").font(.system(size:20,weight:.regular,design:.serif)); Text(china ? "A PERSONAL ATLAS · CHINA" : "A PERSONAL ATLAS · WORLD").font(.system(size:8,design:.monospaced)).tracking(2) }.foregroundStyle(Ink.text.opacity(0.7)).padding(20).allowsHitTesting(false)
-                        VStack { Spacer(); HStack(spacing:8) { Circle().fill(Ink.ochre).frame(width:6,height:6); Text("去过"); Circle().fill(Ink.muted.opacity(0.4)).frame(width:6,height:6); Text("尚未留下足迹"); Spacer() }.font(.system(size:9)).foregroundStyle(Ink.muted).padding(16) }.allowsHitTesting(false)
+                        VStack { Spacer(); HStack(spacing:8) { Circle().fill(Ink.ochre).frame(width:6,height:6); Text("去过"); Circle().fill(Ink.muted.opacity(0.4)).frame(width:6,height:6); Text("尚未留下足迹"); if store.residentCity != nil { Image(systemName:"house.fill").foregroundStyle(Theme.teal); Text("常驻城市") }; Spacer() }.font(.system(size:9)).foregroundStyle(Ink.muted).padding(16) }.allowsHitTesting(false)
                         VStack { HStack { Spacer(); VStack(spacing:0) { Button { zoom=min(zoom*1.4,8); baseZoom=zoom } label:{ Image(systemName:"plus").frame(width:28,height:28) }; Divider(); Button { zoom=max(zoom/1.4,1); baseZoom=zoom } label:{ Image(systemName:"minus").frame(width:28,height:28) }; Divider(); Button { reset() } label:{ Image(systemName:"arrow.up.left.and.arrow.down.right").frame(width:28,height:28) } }.buttonStyle(.plain).frame(width:30).background(Ink.panel.opacity(0.92),in:RoundedRectangle(cornerRadius:7)).padding(.top,16).padding(.trailing,16) }; Spacer() }
                     }.clipShape(RoundedRectangle(cornerRadius:13)).overlay(RoundedRectangle(cornerRadius:13).stroke(Ink.line,lineWidth:1))
                 }
@@ -287,7 +332,8 @@ struct MapPage: View {
             HStack { Image(systemName:"lock.shield"); Text("只属于你的地图 · 所有资料保存在这台 Mac"); Spacer(); Text("拖动平移 · 双指缩放 · 点击区域查看") }.font(.system(size:10)).foregroundStyle(.secondary)
         }.padding(28)
         .onChange(of:store.selectedCity) { _, id in if let id, let city=store.cityIndex[id] { let target=city.countryID == "CHN"; if china != target { china=target; reset() } } }
-        .onAppear { if let id=store.selectedCity, let city=store.cityIndex[id] { china=city.countryID == "CHN" } }
+        .onChange(of:store.cityNavigationRevision) { _, _ in revealSelectedCity() }
+        .onAppear { revealSelectedCity() }
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in searchFocused=true }
         .sheet(isPresented:$exporting) { MapExport(paths:paths,china:china).environmentObject(store) }
     }
@@ -324,9 +370,24 @@ struct MapPage: View {
         }
     }
     func reset() { zoom=1; baseZoom=1; pan = .zero; dragStart = .zero }
+    func revealSelectedCity() {
+        selectedCountry=nil
+        guard let id=store.selectedCity, let city=store.cityIndex[id] else { return }
+        china=city.countryID == "CHN"
+        reset()
+    }
     func select(at point: CGPoint,size: CGSize) {
-        if china && AtlasCanvas.chinaInset(size:size).contains(point) { return } // inset is display-only
+        if china && AtlasCanvas.chinaInset(size:size).contains(point) {
+            if let city = store.residentCity, city.countryID == "CHN", city.latitude < 17.8 {
+                let inner = AtlasCanvas.chinaInset(size:size).insetBy(dx:10,dy:14)
+                let inset = MapTransform(size:inner.size,bounds:paths.chinaSouthBounds,china:true,zoom:1,pan:.zero)
+                let pin = inset.point(city).applying(CGAffineTransform(translationX:inner.minX,y:inner.minY))
+                if hypot(pin.x-point.x,pin.y-point.y)<16 { store.selectedCity=city.id; selectedCountry=nil; store.search="" }
+            }
+            return
+        }
         let t=MapTransform(size:size,bounds:china ? paths.chinaMainBounds : paths.worldBounds,china:china,zoom:zoom,pan:pan)
+        if let city = store.residentCity, !china || (city.countryID == "CHN" && city.latitude >= 17.8), hypot(t.point(city).x-point.x,t.point(city).y-7-point.y)<18 { store.selectedCity=city.id; selectedCountry=nil; store.search=""; return }
         if let city=visibleCities.filter({!china || $0.countryID=="CHN"}).min(by:{hypot(t.point($0).x-point.x,t.point($0).y-point.y)<hypot(t.point($1).x-point.x,t.point($1).y-point.y)}), hypot(t.point(city).x-point.x,t.point(city).y-point.y)<12 { store.selectedCity=city.id; selectedCountry=nil; store.search=""; return }
         let p=t.inverse(point)
         if china, let shape=paths.china.last(where:{ !$0.region.cityID.isEmpty && $0.path.contains(p,eoFill:true) }) { store.selectedCity=shape.region.cityID; selectedCountry=nil; store.search="" }
@@ -342,7 +403,7 @@ struct MapExport: View {
     var preview: some View {
         VStack(spacing:0) {
             HStack { VStack(alignment:.leading,spacing:6) { Text("我的足迹 · \(china ? "神州行记" : "世界航海志")").font(.system(size:25,design:.serif)); Text("\(store.metrics.cities) 座城市 · \(store.metrics.countries) 个国家 / 地区\(store.year == 0 ? "" : " · \(store.year) 年")").font(.system(size:12)) }; Spacer(); if name && !store.ownerName.isEmpty { Text(store.ownerName).font(.system(size:16,design:.serif)) } }.padding(25)
-            AtlasCanvas(paths:paths,china:china,cities:store.visitedIDs.compactMap{store.cityIndex[$0]},selected:nil,showLabels:labels)
+            AtlasCanvas(paths:paths,china:china,cities:store.visitedIDs.compactMap{store.cityIndex[$0]},selected:nil,showLabels:labels,residentCity:store.residentCity)
             Text("搞足迹  /  THE ATLAS OF YOUR LIFE").font(.system(size:9,design:.monospaced)).tracking(3).padding(14)
         }.foregroundStyle(Ink.text).background(Ink.paper)
     }

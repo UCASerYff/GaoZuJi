@@ -103,6 +103,14 @@ struct CityDetail: View {
             Text(city.name).font(.system(size:22,weight:.semibold)); Text(store.location(city)).font(.caption).foregroundStyle(.secondary)
             if !city.english.isEmpty {Text(city.english).font(.caption).foregroundStyle(.secondary)}
             Label(visits.isEmpty ? tF("还没有留下足迹","No footprints yet") : tF("已到访 \(visits.count) 次","Visited \(visits.count) time(s)"),systemImage:visits.isEmpty ? "mappin" : "checkmark.seal.fill").font(.caption).foregroundStyle(Theme.teal)
+            if store.journal.residentCityID == city.id {
+                Label(tF("常驻城市", "Home city"), systemImage: "house.fill").font(.caption).foregroundStyle(Theme.teal)
+                Button(tF("清除常驻城市", "Clear Home City")) { store.setResidentCity(nil) }.disabled(!store.ready)
+            } else {
+                Button { store.setResidentCity(city.id) } label: {
+                    Label(tF("设为常驻城市", "Set as Home City"), systemImage: "house")
+                }.disabled(!store.ready)
+            }
             Button(visits.isEmpty ? tF("我去过这里","I've Been Here") : tF("记录又一次到访","Record Another Visit")){store.editor=EditorRequest(cityID:city.id)}.buttonStyle(.borderedProminent)
             ForEach(visits){v in
                 Divider();Text(v.date.label).font(.system(size:13,weight:.medium));if let tid=v.tripID,let trip=store.journal.trips.first(where:{$0.id==tid}){Text(trip.name).font(.caption).foregroundStyle(Theme.teal)}

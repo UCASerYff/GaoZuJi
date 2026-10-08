@@ -71,11 +71,13 @@ struct Journal: Codable, Equatable {
     var visits: [Visit] = []
     var trips: [Trip] = []
     var customCities: [City] = []
+    // A home base is a preference, not a visit or a source of travel rewards.
+    var residentCityID: String? = nil
     var attachments: [Attachment] = []
     var modifiedAt: Date = Date()
     var train = TrainState()
 
-    enum CodingKeys: String, CodingKey { case schema, datasetVersion, visits, trips, customCities, attachments, modifiedAt, train }
+    enum CodingKeys: String, CodingKey { case schema, datasetVersion, visits, trips, customCities, residentCityID, attachments, modifiedAt, train }
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -84,6 +86,7 @@ struct Journal: Codable, Equatable {
         visits = try c.decodeIfPresent([Visit].self, forKey: .visits) ?? []
         trips = try c.decodeIfPresent([Trip].self, forKey: .trips) ?? []
         customCities = try c.decodeIfPresent([City].self, forKey: .customCities) ?? []
+        residentCityID = try c.decodeIfPresent(String.self, forKey: .residentCityID)
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
         modifiedAt = try c.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? Date()
         train = try c.decodeIfPresent(TrainState.self, forKey: .train) ?? TrainState()

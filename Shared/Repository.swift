@@ -62,6 +62,7 @@ final class Repository {
                 let meta = try decoder.decode(Journal.self, from: bytes)
                 guard meta.schema == 1 else { throw AppFailure("此存档来自不支持的版本，请升级应用。") }
                 data.schema = meta.schema; data.datasetVersion = meta.datasetVersion; data.modifiedAt = meta.modifiedAt; data.train = meta.train
+                data.residentCityID = meta.residentCityID
             default: throw AppFailure("发现无法识别的存档类型，请使用兼容版本打开。")
             }
         }
@@ -102,6 +103,9 @@ final class Repository {
             guard !builtIn.contains(c.id), c.isCustom, !c.name.trimmed.isEmpty, c.countryID != "CHN", countries.contains(c.countryID), c.latitude.isFinite, c.longitude.isFinite, (-90...90).contains(c.latitude), (-180...180).contains(c.longitude) else { throw AppFailure("自定义地点无效或与内置城市冲突。") }
         }
         let cityIDs = builtIn.union(data.customCities.map(\.id)), tripIDs = Set(data.trips.map(\.id)), photoIDs = Set(data.attachments.map(\.id))
+        if let residentCityID = data.residentCityID, !cityIDs.contains(residentCityID) {
+            throw AppFailure(tF("常驻城市不存在，请重新选择。", "The resident city does not exist; choose it again."))
+        }
         guard data.trips.allSatisfy({ !$0.name.trimmed.isEmpty }) else { throw AppFailure("旅行名称不能为空。") }
         for v in data.visits {
             try v.date.validate()
@@ -128,7 +132,9 @@ final class Repository {
         guard size > 0, size <= 500 * 1024 * 1024 else { throw AppFailure("备份为空或超过本版 500 MB 文件上限。") }
         let b = try decoder.decode(Backup.self, from: Data(contentsOf: url))
         let currentDigest = digest(try encoder.encode(b.journal))
-        let legacyDigest = b.journal.train == TrainState() ? digest(try encoder.encode(LegacyJournal(b.journal))) : ""
+        // Legacy digests do not cover either of these fields, so they are only
+        // eligible when neither field carries information that could be altered.
+        let legacyDigest: String? = b.journal.train == TrainState() && b.journal.residentCityID == nil ? digest(try encoder.encode(LegacyJournal(b.journal))) : nil
         guard b.format == "GaoZuJi.backup", b.version == 1,
               b.journalDigest == currentDigest || b.journalDigest == legacyDigest else { throw AppFailure("备份版本不支持或记录校验失败。") }
         try validate(b.journal, geography: geography)

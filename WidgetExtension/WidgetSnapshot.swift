@@ -1,4 +1,3 @@
-// ⚠️ 构建期生成：单一事实源是 Shared/WidgetSnapshot.swift，请勿直接编辑本文件。
 import Foundation
 
 /// 小组件快照：主 App 保存后写入 App Group 共享容器，WidgetKit 扩展只读。
@@ -18,6 +17,9 @@ struct FootprintWidgetSnapshot: Codable, Equatable {
     var continents: Int = 0
     var visits: Int = 0
     var recent: [RecentVisit] = []
+    /// Optional 字段允许升级后继续读取尚未刷新的旧版小组件缓存。
+    var residentCityName: String? = nil
+    var residentCountryID: String? = nil
 
     /// 从资料库与统计生成快照；最近足迹按日期新到旧排序，时间未详排在最后。
     static func make(_ journal: Journal, cities: [String: City], countries: [String: Country], chinaTotal: Int, now: Date = Date()) -> FootprintWidgetSnapshot {
@@ -40,7 +42,9 @@ struct FootprintWidgetSnapshot: Codable, Equatable {
             cities: metrics.cities, countries: metrics.countries,
             china: metrics.china, chinaTotal: chinaTotal,
             continents: metrics.continents.count, visits: journal.visits.count,
-            recent: Array(recent)
+            recent: Array(recent),
+            residentCityName: journal.residentCityID.flatMap { cities[$0]?.name },
+            residentCountryID: journal.residentCityID.flatMap { cities[$0]?.countryID }
         )
     }
 }

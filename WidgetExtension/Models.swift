@@ -1,4 +1,4 @@
-// ⚠️ 构建期生成：单一事实源是 Shared/Models.swift，请勿直接编辑本文件。
+// 小组件使用的轻量模型；对应字段需与 Shared/Models.swift 保持兼容，不依赖主程序游戏模型。
 import Foundation
 
 struct AppFailure: LocalizedError {
@@ -74,6 +74,7 @@ struct Journal: Codable, Equatable {
     var customCities: [City] = []
     var attachments: [Attachment] = []
     var modifiedAt: Date = Date()
+    var residentCityID: String? = nil
 }
 struct Metrics {
     var cities: Int; var countries: Int; var china: Int; var visits: Int; var trips: Int

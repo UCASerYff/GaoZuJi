@@ -40,17 +40,25 @@ struct FootprintMapWidgetView: View {
     }
 
     private func statsPanel(snapshot: FootprintWidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: snapshot.residentCityName == nil ? 7 : 4) {
             Text("搞足迹")
                 .font(.system(size: 10, weight: .medium))
                 .tracking(2)
                 .foregroundStyle(WidgetInk.muted)
             Text("\(snapshot.cities)")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .font(.system(size: snapshot.residentCityName == nil ? 28 : 25, weight: .semibold, design: .rounded))
                 .foregroundStyle(WidgetInk.text)
             + Text(" 城")
                 .font(.system(size: 12))
                 .foregroundStyle(WidgetInk.muted)
+            if let city = snapshot.residentCityName {
+                Label("常驻 · \(city)", systemImage: "house.fill")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color(red: 0.17, green: 0.39, blue: 0.36))
+                    .lineLimit(1)
+                    .help("常驻城市：\(city)")
+                    .accessibilityLabel("常驻城市：\(city)")
+            }
             statRow(label: "国家/地区", value: "\(snapshot.countries)")
             statRow(label: "大洲", value: "\(snapshot.continents)")
             VStack(alignment: .leading, spacing: 3) {
@@ -61,7 +69,7 @@ struct FootprintMapWidgetView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, snapshot.residentCityName == nil ? 10 : 8)
         .frame(width: 128)
         .background(WidgetInk.panel.opacity(0.92), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(WidgetInk.line, lineWidth: 1))

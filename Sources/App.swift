@@ -13,6 +13,7 @@ struct RootView:View{
     /// 自绘侧栏导航行的 hover 跟踪（浅灰反馈，与词元一致）。
     @State private var hoveredSection:String?
     @State var paths:AtlasPaths?
+    @State private var showResidentCityEditor = false
     var body:some View{
         // 侧栏重设计（对齐词元 2.2/2.3 标杆）：弃用系统 NavigationSplitView 列表侧栏，
         // 改 HStack 自绘——品牌头部 + 浮动卡片选中态导航行 + hover 反馈 + 状态底卡。
@@ -74,6 +75,7 @@ struct RootView:View{
         .sheet(item:$store.editor){request in VisitEditor(request:request).environmentObject(store)}
         .sheet(item:$store.tripEditor){trip in TripEditor(trip:trip).environmentObject(store)}
         .sheet(isPresented:$store.customEditor){if let paths{CustomCityEditor(paths:paths).environmentObject(store)}}
+        .sheet(isPresented:$showResidentCityEditor){ResidentCityEditor().environmentObject(store)}
         .alert(tF("操作提示","Notice"),isPresented:Binding(get:{store.error != nil},set:{if !$0{store.error=nil}})){Button(tF("知道了","OK")){store.error=nil}}message:{Text(store.error ?? "")}
     }
 
@@ -95,6 +97,8 @@ struct RootView:View{
                 .padding(.vertical,14)
                 .frame(maxWidth:.infinity,alignment:.leading)
             }
+            ResidentCitySummary { showResidentCityEditor = true }
+                .padding(.horizontal,14).padding(.bottom,12)
             statusFooter
         }
         .frame(width:236)

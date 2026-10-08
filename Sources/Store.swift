@@ -11,6 +11,7 @@ import ImageIO
     @Published var section = "地图"
     @Published var search = ""
     @Published var selectedCity: String?
+    @Published var cityNavigationRevision = 0
     @Published var year = 0
     @Published var tripFilter = ""
     @Published var editor: EditorRequest?
@@ -79,6 +80,21 @@ import ImageIO
         }
     }
     var allCities: [City] { geography.cities + journal.customCities }
+    var residentCity: City? { journal.residentCityID.flatMap { cityIndex[$0] } }
+    func showCity(_ cityID: String) {
+        selectedCity = cityID
+        search = ""
+        section = "地图"
+        cityNavigationRevision &+= 1
+    }
+    @discardableResult func setResidentCity(_ cityID: String?) -> Bool {
+        guard cityID != journal.residentCityID else { return true }
+        var next = journal
+        next.residentCityID = cityID
+        return commit(next, message: cityID == nil
+            ? tF("已清除常驻城市，原有足迹保留，可撤销", "Home city cleared; footprints kept, undo available")
+            : tF("常驻城市已更新，可撤销", "Home city updated; undo available"), settleTrainRewards: false)
+    }
     var filteredVisits: [Visit] { journal.visits.filter { (year == 0 || $0.date.year == year) && (tripFilter.isEmpty || $0.tripID == tripFilter) } }
     var visitedIDs: Set<String> { Set(filteredVisits.map(\.cityID)) }
     var allVisitedIDs: Set<String> { Set(journal.visits.map(\.cityID)) }
@@ -101,11 +117,11 @@ import ImageIO
             return a.name.localizedStandardCompare(b.name) == .orderedAscending
         }.prefix(limit))
     }
-    @discardableResult func commit(_ next: Journal, message: String) -> Bool {
+    @discardableResult func commit(_ next: Journal, message: String, settleTrainRewards: Bool = true) -> Bool {
         guard ready, let repo else { error = tF("资料库不可写，请先修复打开错误。","The library is not writable; please fix the opening error first."); return false }
         do {
             var next = next; next.modifiedAt = Date()
-            _ = TrainEngine.settle(&next.train, journal: next)
+            if settleTrainRewards { _ = TrainEngine.settle(&next.train, journal: next) }
             try repo.validate(next, geography: geography)
             for photo in next.attachments where next.visits.contains(where: { $0.photoIDs.contains(photo.id) }) {
                 guard FileManager.default.fileExists(atPath: repo.photoURL(photo).path) else { throw AppFailure(tF("照片文件缺失，未保存。","A photo file is missing; not saved.")) }
@@ -126,7 +142,7 @@ import ImageIO
         guard let previous = undoState else { return }
         var restored = previous
         restored.train = journal.train
-        if commit(restored, message: tF("已撤销上一次修改","Last change undone")) { undoState = nil; undoAvailable = false }
+        if commit(restored, message: tF("已撤销上一次修改","Last change undone"), settleTrainRewards: false) { undoState = nil; undoAvailable = false }
     }
     @discardableResult private func saveTrain(_ next: TrainState) -> Bool {
         guard ready, let repo else { error = tF("足迹资料库尚未就绪。", "Footprints library is not ready."); return false }

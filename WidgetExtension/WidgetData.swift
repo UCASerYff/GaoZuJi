@@ -12,8 +12,12 @@ struct FootprintWidgetData {
 
     static let empty = FootprintWidgetData(snapshot: nil, chinaMap: nil, worldMap: nil)
 
-    /// 有中国足迹时展示中国地图，否则展示世界地图。
+    /// 常驻城市优先决定范围，确保海外常驻地点不会被中国视图隐藏。
+    /// 未设置常驻城市时沿用已有足迹范围。
     var map: NSImage? {
+        if let country = snapshot?.residentCountryID {
+            return country == "CHN" ? (chinaMap ?? worldMap) : (worldMap ?? chinaMap)
+        }
         if let snapshot, snapshot.china > 0, let chinaMap { return chinaMap }
         return worldMap ?? chinaMap
     }

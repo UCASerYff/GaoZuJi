@@ -24,6 +24,8 @@ import WidgetKit
 
     /// 保存成功后调用。`onlyIfStale` 用于启动时补发：容器内已有鲜活快照则跳过渲染。
     static func publish(store: Store, onlyIfStale: Bool = false) {
+        // 读取主资料失败时保留已有快照，不能把未加载状态当作空白资料发布。
+        guard store.ready else { return }
         // 测试资料库隔离（GAOZUJI_DATA_DIR）时不污染真实小组件。
         guard ProcessInfo.processInfo.environment["GAOZUJI_DATA_DIR"] == nil else { return }
         guard let container = containerURL else { return }
@@ -44,16 +46,16 @@ import WidgetKit
         if cachedPaths == nil { cachedPaths = AtlasPaths(store.geography) }
         guard let paths = cachedPaths else { return }
         let visited = store.allVisitedIDs.compactMap { store.cityIndex[$0] }
-        render(paths: paths, china: true, cities: visited, to: container.appendingPathComponent(chinaMapFile))
-        render(paths: paths, china: false, cities: visited, to: container.appendingPathComponent(worldMapFile))
+        render(paths: paths, china: true, cities: visited, residentCity: store.residentCity, to: container.appendingPathComponent(chinaMapFile))
+        render(paths: paths, china: false, cities: visited, residentCity: store.residentCity, to: container.appendingPathComponent(worldMapFile))
         try? currentVersion.write(to: markerURL, atomically: true, encoding: .utf8)
 #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
 #endif
     }
 
-    private static func render(paths: AtlasPaths, china: Bool, cities: [City], to url: URL) {
-        let canvas = AtlasCanvas(paths: paths, china: china, cities: cities, selected: nil, showLabels: false, compactChina: china)
+    private static func render(paths: AtlasPaths, china: Bool, cities: [City], residentCity: City?, to url: URL) {
+        let canvas = AtlasCanvas(paths: paths, china: china, cities: cities, selected: nil, showLabels: false, compactChina: china, residentCity: residentCity)
         let view = NSHostingView(rootView: canvas.frame(width: mapSize.width, height: mapSize.height))
         view.frame = CGRect(origin: .zero, size: mapSize)
         view.layoutSubtreeIfNeeded()
