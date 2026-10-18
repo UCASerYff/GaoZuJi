@@ -25,8 +25,28 @@ if pgrep -f '^/Applications/搞足迹.app/Contents/MacOS/GaoZuJi' >/dev/null; th
 STAMP=$(date +%Y%m%d-%H%M%S)
 SAFETY="$ROOT/rollback/搞足迹-$STAMP.app"
 mkdir -p "$ROOT/rollback"
-if [[ -d "$TARGET" ]]; then mv "$TARGET" "$SAFETY";fi
-if ! ditto "$SOURCE" "$TARGET" || ! codesign --verify --deep --strict "$TARGET" || ! "$LSREGISTER" -f -R "$TARGET" || ! pluginkit -a "$TARGET/Contents/PlugIns/GaoZuJiWidgets.appex"; then
+if [[ -d "$TARGET" ]]; then
+    # Unregister before moving: otherwise LaunchServices can follow the old inode
+    # into rollback and later invalidate the newly registered extension.
+    "$LSREGISTER" -u "$TARGET"
+    mv "$TARGET" "$SAFETY"
+    "$LSREGISTER" -u "$SAFETY" 2>/dev/null || true
+fi
+register_installed_widget() {
+    "$LSREGISTER" -f -R "$TARGET" || return 1
+    pluginkit -a "$TARGET/Contents/PlugIns/GaoZuJiWidgets.appex" || return 1
+    local registration attempt
+    for attempt in 1 2 3 4 5; do
+        registration=$(pluginkit -m -A -D -v -i com.gaoseries.GaoZuJi.widgets)
+        if [[ "$registration" == *"com.gaoseries.GaoZuJi.widgets($(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/Info.plist"))"* && "$registration" == *"$TARGET/Contents/PlugIns/GaoZuJiWidgets.appex"* ]]; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+if ! ditto "$SOURCE" "$TARGET" || ! codesign --verify --deep --strict "$TARGET" || ! register_installed_widget; then
+    "$LSREGISTER" -u "$TARGET" 2>/dev/null || true
     rm -rf "$TARGET"
     if [[ -d "$SAFETY" ]];then mv "$SAFETY" "$TARGET";"$LSREGISTER" -f -R "$TARGET";pluginkit -a "$TARGET/Contents/PlugIns/GaoZuJiWidgets.appex";fi
     exit 1
