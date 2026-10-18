@@ -75,6 +75,7 @@ struct Journal: Codable, Equatable {
     var attachments: [Attachment] = []
     var modifiedAt: Date = Date()
     var residentCityID: String? = nil
+    var footprintModifiedAt: Date? = nil
 }
 struct Metrics {
     var cities: Int; var countries: Int; var china: Int; var visits: Int; var trips: Int

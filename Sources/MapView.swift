@@ -333,7 +333,8 @@ struct MapPage: View {
         }.padding(28)
         .onChange(of:store.selectedCity) { _, id in if let id, let city=store.cityIndex[id] { let target=city.countryID == "CHN"; if china != target { china=target; reset() } } }
         .onChange(of:store.cityNavigationRevision) { _, _ in revealSelectedCity() }
-        .onAppear { revealSelectedCity() }
+        .onChange(of:store.widgetMapNavigationRevision) { _, _ in revealWidgetScope() }
+        .onAppear { revealSelectedCity(); revealWidgetScope() }
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in searchFocused=true }
         .sheet(isPresented:$exporting) { MapExport(paths:paths,china:china).environmentObject(store) }
     }
@@ -370,6 +371,11 @@ struct MapPage: View {
         }
     }
     func reset() { zoom=1; baseZoom=1; pan = .zero; dragStart = .zero }
+    func revealWidgetScope() {
+        guard let scope = store.widgetMapScope else { return }
+        china = scope == "china"; selectedCountry = nil; reset()
+        store.widgetMapScope = nil
+    }
     func revealSelectedCity() {
         selectedCountry=nil
         guard let id=store.selectedCity, let city=store.cityIndex[id] else { return }

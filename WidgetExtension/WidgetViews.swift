@@ -34,6 +34,9 @@ struct FootprintMapWidgetView: View {
                     Spacer(minLength: 0)
                 }
             }
+            .help(timeChainDescription)
+            .accessibilityElement(children: .contain)
+            .accessibilityValue(timeChainDescription)
         } else {
             emptyState
         }
@@ -41,10 +44,17 @@ struct FootprintMapWidgetView: View {
 
     private func statsPanel(snapshot: FootprintWidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: snapshot.residentCityName == nil ? 7 : 4) {
-            Text("搞足迹")
-                .font(.system(size: 10, weight: .medium))
-                .tracking(2)
-                .foregroundStyle(WidgetInk.muted)
+            HStack(spacing: 3) {
+                Text("搞足迹")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(WidgetInk.muted)
+                Spacer(minLength: 0)
+                Text(sourceDateLabel)
+                    .font(.system(size: 8))
+                    .foregroundStyle(entry.data.readResult == "previous" ? WidgetInk.ochre : WidgetInk.muted)
+                    .lineLimit(1)
+                    .accessibilityLabel("资料更新时间：\(timestamp(entry.data.sourceModifiedAt))")
+            }
             Text("\(snapshot.cities)")
                 .font(.system(size: snapshot.residentCityName == nil ? 28 : 25, weight: .semibold, design: .rounded))
                 .foregroundStyle(WidgetInk.text)
@@ -93,11 +103,35 @@ struct FootprintMapWidgetView: View {
             Image(systemName: "map")
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(WidgetInk.muted)
-            Text("打开搞足迹，点亮第一座城")
+            Text("暂无可用快照")
                 .font(.system(size: 12))
+                .foregroundStyle(WidgetInk.muted)
+            Text("打开搞足迹以同步地图与统计")
+                .font(.system(size: 10))
                 .foregroundStyle(WidgetInk.muted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(WidgetInk.paper)
+    }
+
+    private var sourceDateLabel: String {
+        guard let date = entry.data.sourceModifiedAt else { return "资料日期未知" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M/d"
+        return "资料 \(formatter.string(from: date))"
+    }
+
+    private func timestamp(_ date: Date?) -> String {
+        guard let date else { return "未知" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss ZZZZZ"
+        return formatter.string(from: date)
+    }
+
+    private var timeChainDescription: String {
+        let state = entry.data.readResult == "previous" ? "显示上一份完整快照" : "显示已发布的完整快照"
+        return "\(state)\n资料更新：\(timestamp(entry.data.sourceModifiedAt))\n快照发布：\(timestamp(entry.data.publishedAt))\n系统请求：\(timestamp(entry.data.requestedAt))\n组件读取：\(timestamp(entry.data.readAt))"
     }
 }

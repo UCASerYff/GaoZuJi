@@ -6,7 +6,7 @@ struct FootprintMapWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: FootprintWidgetProvider()) { entry in
             FootprintMapWidgetView(entry: entry)
-                .widgetURL(URL(string: "gaozuji://map"))
+                .widgetURL(entry.data.mapURL)
         }
         .configurationDisplayName("点亮地图")
         .description("羊皮纸地图上的点亮进度：城市、国家与中国收集进度。")

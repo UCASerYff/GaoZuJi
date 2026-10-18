@@ -1,47 +1,117 @@
 import Foundation
 import AppKit
 
-/// 小组件数据：解码主 App 发布到 App Group 的快照与迷你地图。
-/// 全部字段容错解码，旧版本快照缺失字段时也能显示。
+/// 只接受共享容器中完整且校验通过的同代统计与地图，不再拼接旧版分文件快照。
 struct FootprintWidgetData {
     static let appGroupID = "5G96498KGJ.com.gaoseries.GaoZuJi"
 
     let snapshot: FootprintWidgetSnapshot?
     let chinaMap: NSImage?
     let worldMap: NSImage?
+    var generationID: String? = nil
+    var sourceDigest: String? = nil
+    var sourceModifiedAt: Date? = nil
+    var publishedAt: Date? = nil
+    var requestedAt: Date? = nil
+    var readAt: Date? = nil
+    var readResult: String = "unavailable"
+    var failureCode: String? = nil
 
     static let empty = FootprintWidgetData(snapshot: nil, chinaMap: nil, worldMap: nil)
 
-    /// 常驻城市优先决定范围，确保海外常驻地点不会被中国视图隐藏。
-    /// 未设置常驻城市时沿用已有足迹范围。
-    var map: NSImage? {
-        if let country = snapshot?.residentCountryID {
-            return country == "CHN" ? (chinaMap ?? worldMap) : (worldMap ?? chinaMap)
-        }
-        if let snapshot, snapshot.china > 0, let chinaMap { return chinaMap }
-        return worldMap ?? chinaMap
+    /// 只有这里决定显示范围；图片与点击链接使用同一个结果。
+    var mapScope: String {
+        let prefersChina: Bool
+        if let country = snapshot?.residentCountryID { prefersChina = country == "CHN" }
+        else { prefersChina = (snapshot?.china ?? 0) > 0 }
+        if prefersChina { return chinaMap != nil ? "china" : "world" }
+        return worldMap != nil ? "world" : "china"
     }
 
-    private static func load(from directory: URL) -> FootprintWidgetData? {
-        let snapshotURL = directory.appendingPathComponent("widget-snapshot.json")
-        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let snapshot = try? decoder.decode(FootprintWidgetSnapshot.self, from: data) else { return nil }
-        return FootprintWidgetData(
-            snapshot: snapshot,
-            chinaMap: NSImage(contentsOf: directory.appendingPathComponent("widget-map-china.png")),
-            worldMap: NSImage(contentsOf: directory.appendingPathComponent("widget-map-world.png"))
-        )
+    var map: NSImage? { mapScope == "china" ? chinaMap : worldMap }
+    var mapURL: URL? {
+        URL(string: snapshot == nil ? "gaozuji://map" : "gaozuji://map?scope=\(mapScope)")
     }
 
-    static func load() -> FootprintWidgetData {
-        // 小组件运行在沙箱中，只读主 App 镜像到 App Group 容器的快照；
-        // ad-hoc 签名安装没有共享容器，小组件显示空状态，下次打开主 App 后恢复。
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID),
-              let data = load(from: container) else {
-            return .empty
+    /// directory 参数只用于隔离测试；生产环境始终使用带 entitlement 的 App Group。
+    static func load(from directory: URL, reason: String, family: String, requestedAt: Date = Date()) -> FootprintWidgetData {
+        let data: FootprintWidgetData
+        do {
+            let result = try WidgetGenerationStore(root: directory).loadResult()
+            let generation = result.generation
+            guard let china = NSImage(data: generation.chinaPNG), let world = NSImage(data: generation.worldPNG) else {
+                throw WidgetReadFailure.invalidImage
+            }
+            data = FootprintWidgetData(
+                snapshot: generation.snapshot, chinaMap: china, worldMap: world,
+                generationID: generation.generationID, sourceDigest: generation.sourceDigest,
+                sourceModifiedAt: generation.sourceModifiedAt, publishedAt: generation.publishedAt, requestedAt: requestedAt,
+                readAt: Date(), readResult: result.source,
+                failureCode: result.fallbackReason
+            )
+        } catch {
+            var unavailable = Self.empty
+            unavailable.requestedAt = requestedAt
+            unavailable.readAt = Date()
+            unavailable.failureCode = (error as? WidgetGenerationError)?.code ?? (error is WidgetReadFailure ? "invalid_image" : "no_valid_generation")
+            data = unavailable
         }
+        WidgetReadReceipt.record(data: data, directory: directory, reason: reason, family: family, requestedAt: requestedAt)
         return data
+    }
+
+    static func load(reason: String = "timeline", family: String = "systemMedium", requestedAt: Date = Date()) -> FootprintWidgetData {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
+            var unavailable = Self.empty
+            unavailable.requestedAt = requestedAt
+            unavailable.readAt = Date()
+            unavailable.failureCode = "app_group_unavailable"
+            return unavailable
+        }
+        return load(from: container, reason: reason, family: family, requestedAt: requestedAt)
+    }
+}
+
+private enum WidgetReadFailure: Error { case invalidImage }
+
+/// 只表示扩展读取过这份资料，不能据此宣称桌面已经显示；每种调用上下文只保留一份。
+/// 不记录城市名、足迹详情、容器路径等私人内容。
+struct WidgetReadReceipt: Codable {
+    var schema = 1
+    let requestedAt: Date
+    let readAt: Date
+    let sourceModifiedAt: Date?
+    let publishedAt: Date?
+    let generationID: String?
+    let sourceDigest: String?
+    let reason: String
+    let family: String
+    let result: String
+    let errorCode: String?
+    let widgetVersion: String
+    let widgetBuild: String
+
+    static func record(data: FootprintWidgetData, directory: URL, reason: String, family: String, requestedAt: Date) {
+        // Fixed filenames also bound storage if a future caller passes arbitrary reason/family values.
+        let context = ["timeline", "snapshot", "preview"].contains(reason) ? reason : "other"
+        let size = ["systemSmall", "systemMedium", "systemLarge", "systemExtraLarge"].contains(family) ? family : "other"
+        let receipt = WidgetReadReceipt(
+            requestedAt: requestedAt, readAt: data.readAt ?? Date(),
+            sourceModifiedAt: data.sourceModifiedAt, publishedAt: data.publishedAt,
+            generationID: data.generationID, sourceDigest: data.sourceDigest,
+            reason: context, family: size, result: data.readResult, errorCode: data.failureCode,
+            widgetVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+            widgetBuild: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        )
+        do {
+            let folder = directory.appendingPathComponent("widget-diagnostics", isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.sortedKeys]
+            try encoder.encode(receipt).write(to: folder.appendingPathComponent("latest-\(context)-\(size).json"), options: .atomic)
+        } catch {
+            // 观测写入失败（例如满盘）不能破坏仍有效的小组件内容。
+        }
     }
 }

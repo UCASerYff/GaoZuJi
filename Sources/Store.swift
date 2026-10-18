@@ -12,6 +12,8 @@ import ImageIO
     @Published var search = ""
     @Published var selectedCity: String?
     @Published var cityNavigationRevision = 0
+    @Published var widgetMapNavigationRevision = 0
+    var widgetMapScope: String?
     @Published var year = 0
     @Published var tripFilter = ""
     @Published var editor: EditorRequest?
@@ -20,6 +22,7 @@ import ImageIO
     @Published var ready = false
     @Published var undoAvailable = false
     @Published var busy = false
+    @Published var widgetSyncStatus = ""
     /// 离线地图资源（Geography.json）读取失败时的可恢复错误态；非 nil 时界面展示错误与重试入口。
     @Published var resourceError: String?
     private(set) var geography = Geography(countries: [], cities: [], world: [], china: [])
@@ -35,6 +38,14 @@ import ImageIO
         loadResources()
         do {
             let root = ProcessInfo.processInfo.environment["GAOZUJI_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("GaoSeries/Footprints", isDirectory: true)
+            if ProcessInfo.processInfo.environment["GAOZUJI_DATA_DIR"] == nil,
+               !FileManager.default.fileExists(atPath: root.appendingPathComponent("footprints.sqlite").path),
+               let shared = WidgetExporter.containerURL {
+                let previousData = [WidgetGenerationStore.currentFilename, WidgetGenerationStore.previousFilename, "widget-snapshot.json"]
+                if previousData.contains(where: { FileManager.default.fileExists(atPath: shared.appendingPathComponent($0).path) }) {
+                    throw AppFailure(tF("发现既有小组件资料，但足迹主库缺失。已停止创建空库，请先恢复原资料。", "Published widget data exists but the main library is missing. Restore the original library before continuing."))
+                }
+            }
             repo = try Repository(root: root)
             if resourceError == nil {
                 let loaded = try repo!.load()
@@ -44,6 +55,7 @@ import ImageIO
             }
         } catch { self.error = tF("资料库未能安全打开，已停止写入。","The library could not be opened safely; writing has been stopped.") + "\n\(error.localizedDescription)" }
         rebuildIndex()
+        WidgetExporter.start(store: self)
     }
     /// 读取内置离线地图资源。失败不闪退：进入 resourceError 错误态，界面给重试入口。
     private func loadResources() {
@@ -67,8 +79,10 @@ import ImageIO
             let loaded = try repo.load()
             try repo.validate(loaded, geography: geography)
             journal = loaded
+            rebuildIndex()
             ready = true
             self.error = nil
+            WidgetExporter.publish(store: self)
         } catch { self.error = tF("资料库未能安全打开，已停止写入。","The library could not be opened safely; writing has been stopped.") + "\n\(error.localizedDescription)" }
     }
     func rebuildIndex() {
@@ -120,7 +134,11 @@ import ImageIO
     @discardableResult func commit(_ next: Journal, message: String, settleTrainRewards: Bool = true) -> Bool {
         guard ready, let repo else { error = tF("资料库不可写，请先修复打开错误。","The library is not writable; please fix the opening error first."); return false }
         do {
-            var next = next; next.modifiedAt = Date()
+            var next = next
+            var before = journal, after = next
+            forCurrentContent(&before); forCurrentContent(&after)
+            next.footprintModifiedAt = before == after ? (journal.footprintModifiedAt ?? journal.modifiedAt) : Date()
+            next.modifiedAt = Date()
             if settleTrainRewards { _ = TrainEngine.settle(&next.train, journal: next) }
             try repo.validate(next, geography: geography)
             for photo in next.attachments where next.visits.contains(where: { $0.photoIDs.contains(photo.id) }) {
@@ -138,6 +156,11 @@ import ImageIO
             return true
         } catch { self.error = error.localizedDescription; return false }
     }
+    private func forCurrentContent(_ value: inout Journal) {
+        value.modifiedAt = Date(timeIntervalSince1970: 0)
+        value.footprintModifiedAt = nil
+        value.train = TrainState()
+    }
     func undo() {
         guard let previous = undoState else { return }
         var restored = previous
@@ -148,6 +171,7 @@ import ImageIO
         guard ready, let repo else { error = tF("足迹资料库尚未就绪。", "Footprints library is not ready."); return false }
         do {
             var copy = journal
+            copy.footprintModifiedAt = journal.footprintModifiedAt ?? journal.modifiedAt
             copy.train = next; copy.modifiedAt = Date()
             try repo.validate(copy, geography: geography)
             try repo.save(copy)
@@ -219,6 +243,7 @@ import ImageIO
         for a in attachments where !journal.attachments.contains(where: { $0.id == a.id }) { if let url = repo?.photoURL(a) { try? FileManager.default.removeItem(at: url) } }
     }
     func saveFile(name: String, type: UTType, data: () throws -> Data) {
+        guard ready else { error = tF("资料库尚未安全读取，停止导出。", "The library is not safely loaded; export stopped."); return }
         let panel = NSSavePanel(); panel.nameFieldStringValue = name; panel.allowedContentTypes = [type]; panel.canCreateDirectories = true
         if panel.runModal() == .OK, let url = panel.url {
             do { try data().write(to: url, options: .atomic); toast = tF("已导出：","Exported: ") + "\(url.lastPathComponent)" } catch { self.error = error.localizedDescription }

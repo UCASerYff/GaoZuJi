@@ -10,6 +10,8 @@ struct FootprintWidgetSnapshot: Codable, Equatable {
     }
     var schema: Int = 1
     var generatedAt: Date = Date()
+    /// 业务资料时间，与渲染、读取或系统请求时间分开保存。
+    var sourceModifiedAt: Date? = nil
     var cities: Int = 0
     var countries: Int = 0
     var china: Int = 0
@@ -38,7 +40,7 @@ struct FootprintWidgetSnapshot: Codable, Equatable {
                 return RecentVisit(name: city.name, location: location, dateLabel: visit.date.label)
             }
         return FootprintWidgetSnapshot(
-            schema: 1, generatedAt: now,
+            schema: 1, generatedAt: now, sourceModifiedAt: journal.footprintModifiedAt ?? journal.modifiedAt,
             cities: metrics.cities, countries: metrics.countries,
             china: metrics.china, chinaTotal: chinaTotal,
             continents: metrics.continents.count, visits: journal.visits.count,

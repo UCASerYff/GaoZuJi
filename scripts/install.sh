@@ -1,13 +1,16 @@
 #!/bin/zsh
 set -euo pipefail
 ROOT=${0:A:h:h}
-SOURCE="$ROOT/build.noindex/搞足迹.app"
+SOURCE=${GAO_INSTALL_APP:-"$ROOT/build.noindex/搞足迹.app"}
 if [[ ! -d "$SOURCE" ]]; then
+    [[ -z "${GAO_INSTALL_APP:-}" ]] || { echo "指定安装来源不存在";exit 1;}
     SOURCE="$ROOT/.install.noindex/搞足迹.app"
     mkdir -p "$ROOT/.install.noindex"
     VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/Info.plist")
-    (cd "$ROOT/dist";shasum -a 256 -c "搞足迹-$VERSION.zip.sha256")
-    ditto -x -k "$ROOT/dist/搞足迹-$VERSION.zip" "$ROOT/.install.noindex"
+    ARCHIVE="GaoZuJi-$VERSION.zip"
+    [[ -f "$ROOT/dist/$ARCHIVE" ]] || ARCHIVE="搞足迹-$VERSION.zip"
+    (cd "$ROOT/dist";shasum -a 256 -c "$ARCHIVE.sha256")
+    ditto -x -k "$ROOT/dist/$ARCHIVE" "$ROOT/.install.noindex"
 fi
 TARGET="/Applications/搞足迹.app"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister

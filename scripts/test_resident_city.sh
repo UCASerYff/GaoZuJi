@@ -12,8 +12,9 @@ xcrun swiftc -swift-version 5 -parse-as-library -sdk "$SDK" \
     -o "$TEST_BUILD/resident-city-regression"
 "$TEST_BUILD/resident-city-regression"
 xcrun swiftc -swift-version 5 -parse-as-library -sdk "$SDK" \
-    -module-cache-path "$TEST_BUILD/cache" -framework AppKit \
-    "$ROOT/WidgetExtension/Models.swift" "$ROOT/WidgetExtension/WidgetSnapshot.swift" \
+    -module-cache-path "$TEST_BUILD/cache" -framework AppKit -framework CryptoKit -framework ImageIO \
+    "$ROOT/WidgetExtension/Models.swift" "$ROOT/Shared/WidgetSnapshot.swift" \
+    "$ROOT/Shared/WidgetGeneration.swift" \
     "$ROOT/WidgetExtension/WidgetData.swift" "$ROOT/Tests/ResidentWidgetRegression.swift" \
     -o "$TEST_BUILD/resident-widget-regression"
 "$TEST_BUILD/resident-widget-regression"

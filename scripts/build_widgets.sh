@@ -9,6 +9,7 @@ NUMBER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$ROOT/Info.plist")
 
 # 快照结构与 App 始终共用一个来源，避免升级后扩展还在读取旧格式。
 cp "$ROOT/Shared/WidgetSnapshot.swift" "$ROOT/WidgetExtension/WidgetSnapshot.swift"
+cp "$ROOT/Shared/WidgetGeneration.swift" "$ROOT/WidgetExtension/WidgetGeneration.swift"
 xcodebuild -quiet -project "$ROOT/WidgetExtension/GaoZuJiWidgets.xcodeproj" -target GaoZuJiWidgets -configuration Release CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES SYMROOT="$BUILD/widget-products" OBJROOT="$BUILD/widget-objects" CLANG_MODULE_CACHE_PATH="$BUILD/widget-cache" build
 ditto "$BUILD/widget-products/Release/GaoZuJiWidgets.appex" "$BUILD/PlugIns/GaoZuJiWidgets.appex"
 cp "$ROOT/WidgetExtension/Info.plist" "$BUILD/PlugIns/GaoZuJiWidgets.appex/Contents/Info.plist"

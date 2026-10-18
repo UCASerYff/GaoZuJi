@@ -75,20 +75,23 @@ struct Journal: Codable, Equatable {
     var residentCityID: String? = nil
     var attachments: [Attachment] = []
     var modifiedAt: Date = Date()
+    /// Separates footprint edits from train progress. Nil preserves older backup encodings.
+    var footprintModifiedAt: Date? = nil
     var train = TrainState()
 
-    enum CodingKeys: String, CodingKey { case schema, datasetVersion, visits, trips, customCities, residentCityID, attachments, modifiedAt, train }
+    enum CodingKeys: String, CodingKey { case schema, datasetVersion, visits, trips, customCities, residentCityID, attachments, modifiedAt, footprintModifiedAt, train }
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        schema = try c.decodeIfPresent(Int.self, forKey: .schema) ?? 1
+        schema = try c.decode(Int.self, forKey: .schema)
         datasetVersion = try c.decodeIfPresent(String.self, forKey: .datasetVersion) ?? "2026-09-21.1"
         visits = try c.decodeIfPresent([Visit].self, forKey: .visits) ?? []
         trips = try c.decodeIfPresent([Trip].self, forKey: .trips) ?? []
         customCities = try c.decodeIfPresent([City].self, forKey: .customCities) ?? []
         residentCityID = try c.decodeIfPresent(String.self, forKey: .residentCityID)
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
-        modifiedAt = try c.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? Date()
+        modifiedAt = try c.decode(Date.self, forKey: .modifiedAt)
+        footprintModifiedAt = try c.decodeIfPresent(Date.self, forKey: .footprintModifiedAt)
         train = try c.decodeIfPresent(TrainState.self, forKey: .train) ?? TrainState()
     }
 }

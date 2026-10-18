@@ -40,8 +40,12 @@ public struct FootprintsModuleView: View {
     private func handleRoute() {
         guard routeRevision > handledRevision, let route, route.scheme == "gaozuji" else { return }
         handledRevision = routeRevision
-        // 浅处理：gaozuji://map 切到地图区，其余地址回到地图首页。
         store.section = "地图"
+        if route.host == "map" {
+            let scope = URLComponents(url: route, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "scope" }?.value
+            store.search = ""; store.year = 0; store.tripFilter = ""; store.selectedCity = nil
+            if scope == "china" || scope == "world" { store.widgetMapScope = scope; store.widgetMapNavigationRevision &+= 1 }
+        }
     }
 }
 
