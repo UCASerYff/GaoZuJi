@@ -1,17 +1,17 @@
-# 搞足迹 V4.02
+# 搞足迹 V4.03
 
 独立 macOS 应用，包含本模块完整业务、游戏场景和 WidgetKit 小组件。运行不依赖搞七廿三或其他六个应用；联动功能需要同时安装相关应用。
 
 ## 下载与安装
 
-从 [Releases](https://github.com/UCASerYff/GaoZuJi/releases/latest) 下载 `GaoZuJi-4.02.zip` 和同名 `.sha256` 文件。仓库保存源码，安装包作为 Release 附件单独发布。
+从 [Releases](https://github.com/UCASerYff/GaoZuJi/releases/latest) 下载 `GaoZuJi-4.03.zip` 和同名 `.sha256` 文件。仓库保存源码，安装包作为 Release 附件单独发布。
 
 1. 支持 macOS 14 或更高版本、Apple Silicon；暂未提供 Intel 版本。
 2. 解压 ZIP，将 `搞足迹.app` 拖入“应用程序”文件夹。
 3. 如果 macOS 拦截打开，请先确认软件来源，再进入“系统设置 → 隐私与安全性”，允许该应用打开。发行包使用 Apple Development 签名，未做 Apple 公证。
 4. 安装后运行一次，再从系统小组件列表添加本应用的小组件。整合版的小组件需要重新添加。
 
-下载后可在文件所在目录运行 `shasum -a 256 -c GaoZuJi-4.02.zip.sha256` 核验安装包。校验文件名包含中文，命令行请给文件名加引号。
+下载后可在文件所在目录运行 `shasum -a 256 -c GaoZuJi-4.03.zip.sha256` 核验安装包。校验文件名包含中文，命令行请给文件名加引号。
 
 ## 功能
 
@@ -23,6 +23,10 @@
 - 从菜单或 ⌘, 打开设置，提供外观、模块设置、备份与恢复。
 - 提供本应用对应的桌面/通知中心小组件。
 
+
+## V4.03 安装入口
+
+旧程序在移出正式安装位置前精确注销，回退副本从生成时放入 `rollback.noindex/`，避免作为第二个可搜索的应用入口；失败时从该副本恢复正式安装。构建、打包及安装暂存均使用 `.noindex` 容器。
 
 ## V4.02 小组件同步
 

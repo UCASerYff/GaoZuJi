@@ -23,8 +23,8 @@ done
 [[ "$(codesign -dv "$SOURCE" 2>&1 | sed -n 's/^TeamIdentifier=//p')" == "5G96498KGJ" ]] || { echo '需要团队签名';exit 1;}
 if pgrep -f '^/Applications/搞足迹.app/Contents/MacOS/GaoZuJi' >/dev/null; then echo '请先退出当前应用';exit 1;fi
 STAMP=$(date +%Y%m%d-%H%M%S)
-SAFETY="$ROOT/rollback/搞足迹-$STAMP.app"
-mkdir -p "$ROOT/rollback"
+SAFETY="$ROOT/rollback.noindex/搞足迹-$STAMP.app"
+mkdir -p "$ROOT/rollback.noindex"
 if [[ -d "$TARGET" ]]; then
     # Unregister before moving: otherwise LaunchServices can follow the old inode
     # into rollback and later invalidate the newly registered extension.
